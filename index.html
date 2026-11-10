@@ -193,6 +193,7 @@ setTimeout(() => { if (!window.SCENE_OK) document.getElementById('err').style.di
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ---- measurements in cm (same as skohylla.scad). Model coords: x = width from left wall, y = depth from back wall, z = up ----
 const N = 105, SP = 0.5, D = 29.5, RT = 2.7, RH = 4.3, BT = 2.1, NR = 4, LL = 25, BK = 2.7;
@@ -255,40 +256,131 @@ const RAW = [[2.7, 240], [2.7, 240], [2.7, 240], [2.7, 240], [2.1, 330], [2.1, 2
   .map(([t, l], i) => ({ x: 8 + 11.5 * i, y: 8, z: 0, dx: 4.3, dy: l, dz: t }));
 
 // ---- three.js scene (three: X = x, Y = z up, Z = y depth) ----
+// Hall around the niche, from a photo (2026-11-10). Hall measurements are GUESSES: ceiling 250, wardrobe 125 wide x 60 deep,
+// front door 90 wide starting 45 from the back wall. Static scenery is merged per material (few draw calls),
+// shadows are only redrawn when boards move, and frames are only rendered when something changes.
 const view = document.getElementById('view');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const DPR = Math.min(devicePixelRatio, 2);
+const renderer = new THREE.WebGLRenderer({ antialias: DPR < 2, powerPreference: 'low-power' });
+renderer.setPixelRatio(DPR);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 view.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#eef1f4');
-const camera = new THREE.PerspectiveCamera(50, 1, 1, 3000);
+const camera = new THREE.PerspectiveCamera(50, 1, 2, 2000);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 30; controls.maxDistance = 700;
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 30; controls.maxDistance = 500;
+let dirty = true;
+controls.addEventListener('change', () => { dirty = true; });
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8d939a, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 1.7));
+const sun = new THREE.DirectionalLight(0xfff6ea, 1.9);
 sun.position.set(40, 330, 300); sun.target.position.set(52, 0, 120);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 50, far: 800 });
-sun.shadow.bias = -0.0004;
+sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -170, right: 170, top: 170, bottom: -170, near: 100, far: 700 });
+sun.shadow.bias = -0.0006;
 scene.add(sun, sun.target);
+
+const lam = (color, o = {}) => new THREE.MeshLambertMaterial({ color, ...o });
+// small seeded random so the parquet looks the same every time
+let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+function canvasTex(px, draw) {
+  const c = document.createElement('canvas'); c.width = c.height = px; draw(c.getContext('2d'), px);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); return t;
+}
+// oak block parquet, basket weave: 4 x 4 squares of 15 cm, 5 slats each (one tile = 60 x 60 cm)
+const parquet = canvasTex(512, (g, S) => {
+  const sq = S / 4, sl = sq / 5;
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 5; k++) {
+    const h = 31 + rnd() * 5, s = 36 + rnd() * 10, l = 56 + rnd() * 10;
+    g.fillStyle = `hsl(${h} ${s}% ${l}%)`;
+    const across = (i + j) % 2 === 0;
+    const [x, y, w, hh] = across ? [i * sq, j * sq + k * sl, sq, sl] : [i * sq + k * sl, j * sq, sl, sq];
+    g.fillRect(x, y, w, hh);
+    g.strokeStyle = `hsl(${h - 4} 45% ${l - 14}% / .35)`; g.lineWidth = 1;
+    for (let n = 0; n < 3; n++) {           // grain
+      const o = 3 + rnd() * (sl - 6); g.beginPath();
+      if (across) { g.moveTo(x, y + o); g.bezierCurveTo(x + w / 3, y + o + 2, x + 2 * w / 3, y + o - 2, x + w, y + o); }
+      else { g.moveTo(x + o, y); g.bezierCurveTo(x + o + 2, y + hh / 3, x + o - 2, y + 2 * hh / 3, x + o, y + hh); }
+      g.stroke();
+    }
+    g.strokeStyle = 'rgb(70 42 18 / .55)'; g.strokeRect(x + .5, y + .5, w - 1, hh - 1);
+  }
+});
+parquet.repeat.set(230 / 60, 360 / 60);
+// faint plaster noise for walls and ceiling
+const plaster = canvasTex(128, (g, S) => {
+  g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+  for (let n = 0; n < 900; n++) { g.fillStyle = `rgb(0 0 0 / ${rnd() * .02})`; g.fillRect(rnd() * S, rnd() * S, 2, 2); }
+});
+plaster.repeat.set(4, 4);
+
+const M = {
+  wall: lam('#e8e6e1', { map: plaster }), ceil: lam('#f3f2ef', { map: plaster }), white: lam('#f5f4f0'),
+  carcass: lam('#dedcd7'), door: lam('#d6dadb'), metal: lam('#b3b8bd'), beige: lam('#e4d9bb'),
+  fuse: lam('#ebe2cd'), dark: lam('#5f5a52'),
+};
+const bins = {};
+const put = (k, g) => (bins[k] ||= []).push(g);
+// box in model coords (x width, y depth from back wall, z up)
+const sbox = (k, x0, x1, y0, y1, z0, z1) =>
+  put(k, new THREE.BoxGeometry(x1 - x0, z1 - z0, y1 - y0).translate((x0 + x1) / 2, (z0 + z1) / 2, (y0 + y1) / 2));
+const HX0 = -125, HX1 = N, HD = 360, CH = 250;   // hall: wardrobe left edge .. right wall, depth, ceiling
+// walls and ceiling are one-sided planes facing in, so they vanish when you orbit outside (dollhouse view)
+put('wall', new THREE.PlaneGeometry(HX1 - HX0, CH).translate((HX0 + HX1) / 2, CH / 2, 0));
+const rightWall = (y0, y1, z0, z1) => put('wall', new THREE.PlaneGeometry(y1 - y0, z1 - z0).rotateY(-Math.PI / 2).translate(HX1, (z0 + z1) / 2, (y0 + y1) / 2));
+const DY0 = 45, DY1 = 135, DH = 205;              // front door opening in the right wall
+rightWall(0, DY0, 0, CH); rightWall(DY0, DY1, DH, CH); rightWall(DY1, HD, 0, CH);
+put('ceil', new THREE.PlaneGeometry(HX1 - HX0, HD).rotateX(Math.PI / 2).translate((HX0 + HX1) / 2, CH, HD / 2));
+// built-in wardrobe left of the niche: carcass, side panel facing the niche, two sections of doors (lower + upper)
+sbox('carcass', HX0, -0.6, 0, 60, 0, CH);
+sbox('white', -0.6, 0, 0, 60, 0, CH);
+for (const [a, b, knobX] of [[-122, -63.5, -66], [-61.5, -3, -58.5]]) {
+  sbox('white', a, b, 60, 61.4, 2, 196.5);
+  sbox('white', a, b, 60, 61.4, 198, CH - 2);
+  sbox('metal', knobX - 1, knobX + 1, 61.4, 63.4, 108, 110);
+  sbox('metal', knobX - 1, knobX + 1, 61.4, 63.4, 200, 202);
+}
+// front door: leaf set into the wall, reveals, casings, lever and two lock cylinders
+sbox('door', HX1 + 2, HX1 + 6, DY0, DY1, 0, DH);
+sbox('white', HX1, HX1 + 6, DY0 - 1, DY0, 0, DH + 1); sbox('white', HX1, HX1 + 6, DY1, DY1 + 1, 0, DH + 1);
+sbox('white', HX1, HX1 + 6, DY0 - 1, DY1 + 1, DH, DH + 1);
+sbox('white', HX1 - 1.5, HX1, DY0 - 7, DY0, 0, DH + 7); sbox('white', HX1 - 1.5, HX1, DY1, DY1 + 7, 0, DH + 7);
+sbox('white', HX1 - 1.5, HX1, DY0 - 7, DY1 + 7, DH, DH + 7);
+sbox('metal', HX1 - 0.8, HX1 + 2, DY0 + 5, DY0 + 8, 97, 105);      // rosette
+sbox('metal', HX1 - 3, HX1 - 0.8, DY0 + 6, DY0 + 18, 100, 102);    // lever
+for (const z of [84, 118]) sbox('metal', HX1 - 0.4, HX1 + 2, DY0 + 5, DY0 + 8, z, z + 4);
+sbox('beige', HX1 - 1, HX1, DY1 + 14, DY1 + 22, 104, 114);         // light switch
+// skirting and the white line under the ceiling
+sbox('white', 0, HX1, 0, 1.2, 0, 6);
+sbox('white', HX1 - 1.2, HX1, 0, DY0 - 7, 0, 6); sbox('white', HX1 - 1.2, HX1, DY1 + 7, HD, 0, 6);
+sbox('white', 0, HX1, 0, 1.5, CH - 13, CH - 10); sbox('white', HX1 - 1.5, HX1, 0, HD, CH - 13, CH - 10);
+// fuse box high on the back wall
+sbox('fuse', 22, 56, 0, 4, 188, 243); sbox('white', 25, 53, 4, 4.4, 198, 236);
+sbox('dark', 27, 51, 4.4, 5, 215, 220); sbox('dark', 27, 51, 4.4, 5, 203, 207);
+sbox('dark', 51.7, 52.3, 74.7, 75.3, 224, CH);                     // lamp cord
+for (const [k, list] of Object.entries(bins)) {
+  const m = new THREE.Mesh(mergeGeometries(list), M[k]); m.receiveShadow = true; scene.add(m);
+}
+const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(HX1 - HX0, HD).rotateX(-Math.PI / 2).translate((HX0 + HX1) / 2, 0, HD / 2), lam('#ffffff', { map: parquet }));
+floorMesh.receiveShadow = true; scene.add(floorMesh);
+// blue pendant lamp: open cone, white inside
+const cone = new THREE.CylinderGeometry(5, 15, 36, 28, 1, true).translate(52, 206, 75);
+scene.add(new THREE.Mesh(cone, lam('#5c84a1')), new THREE.Mesh(cone, new THREE.MeshBasicMaterial({ color: '#fff6e4', side: THREE.BackSide })));
+const band = new THREE.CylinderGeometry(13.9, 14.6, 3, 28, 1, true).translate(52, 193, 75);
+scene.add(new THREE.Mesh(band, lam('#dfe8ee')));
 
 const unit = new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5);
 const unitEdges = new THREE.EdgesGeometry(unit);
 const place = (o, q) => { o.position.set(q.x, q.z, q.y); o.scale.set(q.dx, q.dz, q.dy); };
-function box(q, color, opts = {}) {
-  const m = new THREE.Mesh(unit, new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts }));
+function box(q, color) {
+  const m = new THREE.Mesh(unit, lam(color));
   m.castShadow = m.receiveShadow = true; place(m, q); scene.add(m); return m;
 }
-// walls + floor
-const WALL = '#e4e2dd', WH = 250;
-box({ x: -6, y: -4, z: 0, dx: N + 12, dy: 4, dz: WH }, WALL);
-box({ x: -6, y: 0, z: 0, dx: 6, dy: D + 6, dz: WH }, '#ecebe7');
-box({ x: N, y: 0, z: 0, dx: 6, dy: D + 6, dz: WH }, '#ecebe7');
-const floor = box({ x: -40, y: -4, z: -1, dx: N + 80, dy: 360, dz: 1 }, '#a9a7a2');
-floor.castShadow = false;
 
 const ACCENT = new THREE.Color('#2b6cff');
 const PINE = { gable: '#c98f52', fb: '#d9a86c', rib: '#e6c48f', cross: '#d9a86c', side: '#c4894d', back: '#c4894d' };
@@ -305,7 +397,7 @@ const raws = RAW.map(q => { const m = box(q, '#d9b07a'); m.add(new THREE.LineSeg
 
 // ---- step changes: tween boards and camera ----
 const CAMS = {
-  done: { p: [52, 85, 175], t: [52, 26, 14] },
+  done: { p: [35, 125, 270], t: [38, 55, 25] },
   raw: { p: [52, 330, 400], t: [52, 0, 175] },
   floor: { p: [52, 190, 255], t: [52, 0, 100] },
   wall: { p: [52, 72, 150], t: [52, 22, 10] },
@@ -330,7 +422,7 @@ window.onStep = s => {
     p.ghost.visible = s > 0 && to !== p.fin;
   }
   raws.forEach(m => m.visible = s === 1);
-  tw = { t0: performance.now() };
+  tw = { t0: performance.now() }; dirty = true; renderer.shadowMap.needsUpdate = true;
   setCam(STEPS[s].cam);
 };
 document.getElementById('reset').onclick = () => setCam(STEPS[step].cam);
@@ -343,11 +435,12 @@ tw = null; camTw = null;
 function resize() {
   const w = view.clientWidth, h = view.clientHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h;
-  camera.fov = w / h < 1 ? 58 : 45; camera.updateProjectionMatrix();
+  camera.fov = w / h < 1 ? 58 : 45; camera.updateProjectionMatrix(); dirty = true;
 }
 new ResizeObserver(resize).observe(view); resize();
 
 renderer.setAnimationLoop(now => {
+  const moving = !!tw;
   if (tw) {
     const k = ease(Math.min(1, (now - tw.t0) / DUR));
     for (const p of P) {
@@ -361,8 +454,9 @@ renderer.setAnimationLoop(now => {
     camera.position.lerpVectors(camTw.p0, camTw.p, k); controls.target.lerpVectors(camTw.t1, camTw.t, k);
     if (k === 1) camTw = null;
   }
-  controls.update();
-  renderer.render(scene, camera);
+  const changed = controls.update();
+  if (moving) renderer.shadowMap.needsUpdate = true;
+  if (dirty || moving || changed) { renderer.render(scene, camera); dirty = false; }
 });
 window.SCENE_OK = true;
 </script>
