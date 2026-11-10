@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Skohylla">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef1f4">
+<title>Skohylla bygganvisning</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: 3D view on top, step list as a bottom sheet. Single light theme (workshop paper + blue pencil). */
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #17202a;
+  --muted: #5b6672;
+  --line: #d5dbe1;
+  --accent: #2b6cff;
+  --pine: #c98f52;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.4 var(--body);
+  display: grid; grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#view { position: relative; min-height: 0; }
+#view canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.chip {
+  position: absolute; top: calc(env(safe-area-inset-top) + 10px); background: rgb(255 255 255 / .88);
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-size: 13px;
+}
+#title { left: calc(env(safe-area-inset-left) + 12px); font: 700 17px/1.1 var(--display); letter-spacing: .02em; }
+#title small { display: block; font: 12px/1.2 var(--body); color: var(--muted); letter-spacing: 0; }
+#reset { right: calc(env(safe-area-inset-right) + 12px); color: var(--ink); cursor: pointer; }
+#hint { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+#err { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+#sheet {
+  background: var(--panel); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
+  box-shadow: 0 -4px 18px rgb(23 32 42 / .08); display: grid; grid-template-rows: auto minmax(0, 1fr);
+  height: 46vh; height: 46dvh; padding-bottom: env(safe-area-inset-bottom);
+}
+.bar { display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.bar button { height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 22px; color: var(--ink); cursor: pointer; }
+.bar button:disabled { opacity: .35; }
+#counter { text-align: center; font: 600 16px var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+#steps { list-style: none; margin: 0; padding: 4px 0 12px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#steps li { border-bottom: 1px solid var(--line); }
+.head {
+  width: 100%; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; text-align: left;
+  background: none; border: 0; padding: 10px 16px; color: var(--ink); font: 600 19px/1.15 var(--display); cursor: pointer;
+}
+.n {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 16px var(--display);
+  border: 1.5px solid var(--line); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+li.done .n { background: var(--pine); border-color: var(--pine); color: #fff; }
+li.on .n { background: var(--accent); border-color: var(--accent); color: #fff; }
+li.on .head { color: var(--accent); }
+.body { display: none; margin: 0; padding: 0 16px 12px 60px; }
+li.on .body { display: grid; gap: 6px; }
+.body p { margin: 0; max-width: 62ch; }
+.body b { font-variant-numeric: tabular-nums; }
+.body .cut { font-variant-numeric: tabular-nums; }
+.body .warn { color: #a5470a; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (min-width: 760px) and (orientation: landscape) {
+  body { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) 380px; }
+  #sheet { height: 100%; border-radius: 0; border-top: 0; border-left: 1px solid var(--line); }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="view">
+  <div id="title" class="chip">Skohylla<small>hallnisch · mått i mm</small></div>
+  <button id="reset" class="chip" type="button">Återställ vy</button>
+  <div id="hint">1 finger vrid · 2 fingrar zooma/flytta</div>
+  <div id="err">3D-vyn kunde inte laddas. Kolla nätet och ladda om.</div>
+</div>
+<section id="sheet" aria-label="Bygganvisning">
+  <nav class="bar">
+    <button id="prev" type="button" aria-label="Föregående steg">‹</button>
+    <div id="counter"></div>
+    <button id="next" type="button" aria-label="Nästa steg">›</button>
+  </nav>
+  <ol id="steps"></ol>
+</section>
+
+<script>
+// Steps: text first so the manual shows even if 3D fails to load.
+window.STEPS = [
+  { t: 'Översikt', cam: 'done', b: [
+    'Två väggfasta hyllor <b>1040 × 295</b>, ovankant <b>170</b> och <b>470</b> över golv.',
+    'Övre hyllan är sittbänk. Ram furu 27×43, 4 ribbor 21×43 på högkant.',
+    'Vilar på U-lister i väggen. Inga skruvar syns framifrån.',
+    'Tryck på ett steg för att se bygget fram till dit.' ] },
+  { t: 'Mät och köp', cam: 'raw', b: [
+    'Mät nischen. Allt nedan gäller bredd <b>1050</b>. Annat mått: hyllbredd = nisch − 10, fram/bak/ribbor = hyllbredd − 54.',
+    'Furu 27×43×2400 × <b>4</b>',
+    'Furu 21×43: 3300 × <b>1</b> + 2400 × <b>3</b>',
+    'Träskruv 5×80 ≈ 35 · 4×80 ≈ 16 · 4×50 ≈ 12',
+    'Plugg 6 mm + skruv 5×60 ≈ 16',
+    '<span class="warn">Väggen: plugg 6 + 5×60 gäller betong. Gips → gipsplugg eller skruva i regel.</span>',
+    'Trälim, 2 tvingar, slip P120 + P150, hårdvaxolja.' ] },
+  { t: 'Kapa', cam: 'floor', b: [
+    '<span class="cut">27×43 nr 1: <b>986 · 986 · 295</b></span>',
+    '<span class="cut">27×43 nr 2: <b>986 · 986 · 295</b></span>',
+    '<span class="cut">27×43 nr 3: <b>295 · 295 · 250 · 250 · 250 · 250</b></span>',
+    '<span class="cut">27×43 nr 4: <b>996 · 996</b> bakre lister (nisch − 54, mät först)</span>',
+    '<span class="cut">21×43 3300: <b>986 · 986 · 986</b></span>',
+    '<span class="cut">21×43 2400 × 3: <b>986 · 986</b> per bräda. Två rester → <b>266 · 266</b> tvärslåar</span>',
+    'Tejpa ihop ribborna och kapa i ett svep. 90°, kolla vinkeln.' ] },
+  { t: 'Bygg ramarna ×2', cam: 'floor', b: [
+    'Gavlar 295 utanpå fram/bak 986 → ram <b>1040 × 295</b>.',
+    'Ribbor på högkant, glipa <b>31</b>. Ribbans bakkant från ramens bakkant: <b>58 · 111 · 163 · 216</b>.',
+    'Förborra 4 mm genom gaveln, 3 mm i ändträet. Lim + 5×80.',
+    'Per gavel: 2 skruv i fram, 2 i bak, 1 per ribba.',
+    'Diagonalerna lika (≈ <b>1081</b>) innan limmet härdar.' ] },
+  { t: 'Tvärslå under mitten', cam: 'floor', b: [
+    'Vänd ramen. 21×43 × 266 flatliggande, centrum <b>520</b> från gavelns utsida.',
+    'Jäms med framkanten, slutar vid bakstycket.',
+    'Lim + 4×50 upp i varje ribba och framstycket.',
+    'Fördelar sittlasten mellan ribborna.' ] },
+  { t: 'Slipa och olja', cam: 'floor', b: [
+    'P120, sedan P150 längs fibrerna. Bryt alla kanter lätt.',
+    'Hårdvaxolja, två tunna lager. Listerna också.',
+    'Låt härda enligt burken före montering.' ] },
+  { t: 'Sidolister', cam: 'wall', b: [
+    '4 × 250 på högkant mot sidoväggarna, kant mot bakväggen.',
+    'Ovankant <b>127</b> (nedre) och <b>427</b> (övre) över golv.',
+    'Vänster: skruva i stödet i garderoben.',
+    'Höger: borra 6 mm, plugg + 5×60, 2 per list.',
+    'Vattenpass tvärs över: vänster och höger i våg.' ] },
+  { t: 'Bakre lister', cam: 'wall', b: [
+    '996 mellan sidolisterna, mot bakväggen.',
+    'Samma ovankant: <b>127</b> och <b>427</b>.',
+    'Plugg + 5×60, 4 per list.' ] },
+  { t: 'Montera nedre hyllan', cam: 'done', b: [
+    'Lägg ramen på listerna, bakstycket mot väggen. 5 mm spel per sida.',
+    'Förborra 3 mm. 4×80 underifrån genom listen: 2 i varje gavel, 3 i bakstycket.' ] },
+  { t: 'Montera övre hyllan', cam: 'done', b: [
+    'Samma sak, ovankant <b>470</b>.',
+    'Fritt mellan hyllorna: <b>257</b>. Kolla våg. Klart.' ] },
+];
+
+const list = document.getElementById('steps');
+STEPS.forEach((s, i) => {
+  const li = document.createElement('li');
+  li.innerHTML = `<button class="head" type="button"><span class="n">${i || '•'}</span><span>${s.t}</span></button>` +
+    `<div class="body">${s.b.map(x => `<p>${x}</p>`).join('')}</div>`;
+  li.querySelector('.head').onclick = () => go(i);
+  list.appendChild(li);
+});
+let step = 0;
+window.onStep = () => {};
+function go(i, fromHash) {
+  step = Math.max(0, Math.min(STEPS.length - 1, i));
+  [...list.children].forEach((li, k) => { li.classList.toggle('on', k === step); li.classList.toggle('done', k < step && k > 0); });
+  document.getElementById('counter').textContent = step ? `Steg ${step} av ${STEPS.length - 1}` : 'Översikt';
+  document.getElementById('prev').disabled = step === 0;
+  document.getElementById('next').disabled = step === STEPS.length - 1;
+  list.children[step].scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  if (!fromHash) history.replaceState(null, '', step ? '#steg-' + step : location.pathname + location.search);
+  onStep(step);
+}
+document.getElementById('prev').onclick = () => go(step - 1);
+document.getElementById('next').onclick = () => go(step + 1);
+const fromHash = () => { const m = /^#steg-(\d+)$/.exec(location.hash); go(m ? +m[1] : 0, true); };
+addEventListener('hashchange', fromHash);
+fromHash();
+setTimeout(() => { if (!window.SCENE_OK) document.getElementById('err').style.display = 'grid'; }, 12000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---- measurements in cm (same as skohylla.scad). Model coords: x = width from left wall, y = depth from back wall, z = up ----
+const N = 105, SP = 0.5, D = 29.5, RT = 2.7, RH = 4.3, BT = 2.1, NR = 4, LL = 25, BK = 2.7;
+const HB = N - 2 * SP, IN = HB - 2 * RT, GL = (D - 2 * RT - NR * BT) / (NR + 1), BL = N - 2 * RT;
+const LEVELS = [{ k: 'N', top: 17, off: 40 }, { k: 'O', top: 47, off: 80 }];
+const FRAME = new Set(['gable', 'fb', 'rib', 'cross']);
+const P = [];
+const add = (lvl, kind, x, y, z, dx, dy, dz, t) => P.push({ lvl, kind, t, fin: { x, y, z, dx, dy, dz } });
+for (const L of LEVELS) {
+  const z = L.top - RH, x0 = SP;
+  add(L, 'gable', x0, 0, z, RT, D, RH, RT);
+  add(L, 'gable', x0 + HB - RT, 0, z, RT, D, RH, RT);
+  add(L, 'fb', x0 + RT, 0, z, IN, RT, RH, RT);
+  add(L, 'fb', x0 + RT, D - RT, z, IN, RT, RH, RT);
+  for (let i = 0; i < NR; i++) add(L, 'rib', x0 + RT, RT + GL * (i + 1) + BT * i, z, IN, BT, RH, BT);
+  add(L, 'cross', N / 2 - 2.15, BK + 0.2, z - BT, 4.3, D - BK - 0.2, BT, BT);
+  const zl = L.top - 2 * RH;
+  add(L, 'side', 0, 0, zl, RT, LL, RH, RT);
+  add(L, 'side', N - RT, 0, zl, RT, LL, RH, RT);
+  add(L, 'back', RT, 0, zl, BL, BK, RH, BK);
+}
+// cut pieces lying flat on the hall floor
+let li = 0, bi = 0, si = 0;
+for (const p of P) {
+  const f = p.fin;
+  if (p.kind === 'fb' || p.kind === 'rib') p.cut = { x: 3, y: 40 + 7 * li++, z: 0, dx: f.dx, dy: RH, dz: p.t };
+  else if (p.kind === 'back') p.cut = { x: 3, y: 130 + 7 * bi++, z: 0, dx: f.dx, dy: RH, dz: p.t };
+  else p.cut = { x: 4 + 10 * si++, y: 150, z: 0, dx: RH, dy: f.dy, dz: p.t };
+}
+// a frame assembled on the floor in front of the niche (lifted by the crossbar once it is on)
+const onFloor = (p, lifted) => {
+  const f = p.fin;
+  return { ...f, y: f.y + p.lvl.off, z: f.z - (p.lvl.top - RH) + (lifted ? BT : 0) };
+};
+function target(p, s) {
+  if (s === 0) return p.fin;
+  if (s === 1) return null;
+  if (FRAME.has(p.kind)) {
+    if (s >= (p.lvl.k === 'N' ? 8 : 9)) return p.fin;
+    if (s >= (p.kind === 'cross' ? 4 : 3)) return onFloor(p, s >= 4);
+    return p.cut;
+  }
+  if (p.kind === 'side') return s >= 6 ? p.fin : p.cut;
+  return s >= 7 ? p.fin : p.cut;
+}
+function lit(p, s) {
+  switch (s) {
+    case 2: case 5: return true;
+    case 3: return ['gable', 'fb', 'rib'].includes(p.kind);
+    case 4: return p.kind === 'cross';
+    case 6: return p.kind === 'side';
+    case 7: return p.kind === 'back';
+    case 8: return p.lvl.k === 'N' && FRAME.has(p.kind);
+    case 9: return p.lvl.k === 'O' && FRAME.has(p.kind);
+  }
+  return false;
+}
+// raw boards (step 1): 4 × 27×43×2400, 1 × 21×43×3300, 3 × 21×43×2400
+const RAW = [[2.7, 240], [2.7, 240], [2.7, 240], [2.7, 240], [2.1, 330], [2.1, 240], [2.1, 240], [2.1, 240]]
+  .map(([t, l], i) => ({ x: 8 + 11.5 * i, y: 8, z: 0, dx: 4.3, dy: l, dz: t }));
+
+// ---- three.js scene (three: X = x, Y = z up, Z = y depth) ----
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#eef1f4');
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 3000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 30; controls.maxDistance = 700;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8d939a, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(40, 330, 300); sun.target.position.set(52, 0, 120);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 50, far: 800 });
+sun.shadow.bias = -0.0004;
+scene.add(sun, sun.target);
+
+const unit = new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5);
+const unitEdges = new THREE.EdgesGeometry(unit);
+const place = (o, q) => { o.position.set(q.x, q.z, q.y); o.scale.set(q.dx, q.dz, q.dy); };
+function box(q, color, opts = {}) {
+  const m = new THREE.Mesh(unit, new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts }));
+  m.castShadow = m.receiveShadow = true; place(m, q); scene.add(m); return m;
+}
+// walls + floor
+const WALL = '#e4e2dd', WH = 250;
+box({ x: -6, y: -4, z: 0, dx: N + 12, dy: 4, dz: WH }, WALL);
+box({ x: -6, y: 0, z: 0, dx: 6, dy: D + 6, dz: WH }, '#ecebe7');
+box({ x: N, y: 0, z: 0, dx: 6, dy: D + 6, dz: WH }, '#ecebe7');
+const floor = box({ x: -40, y: -4, z: -1, dx: N + 80, dy: 360, dz: 1 }, '#a9a7a2');
+floor.castShadow = false;
+
+const ACCENT = new THREE.Color('#2b6cff');
+const PINE = { gable: '#c98f52', fb: '#d9a86c', rib: '#e6c48f', cross: '#d9a86c', side: '#c4894d', back: '#c4894d' };
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x3a2a18, transparent: true, opacity: 0.35 });
+const ghostMat = new THREE.LineBasicMaterial({ color: 0x2b6cff, transparent: true, opacity: 0.16 });
+for (const p of P) {
+  p.base = new THREE.Color(PINE[p.kind]);
+  p.mesh = box(p.fin, p.base.clone());
+  p.mesh.add(new THREE.LineSegments(unitEdges, edgeMat));
+  p.ghost = new THREE.LineSegments(unitEdges, ghostMat); place(p.ghost, p.fin); scene.add(p.ghost);
+  p.cur = { ...p.fin };
+}
+const raws = RAW.map(q => { const m = box(q, '#d9b07a'); m.add(new THREE.LineSegments(unitEdges, edgeMat)); return m; });
+
+// ---- step changes: tween boards and camera ----
+const CAMS = {
+  done: { p: [52, 85, 175], t: [52, 26, 14] },
+  raw: { p: [52, 330, 400], t: [52, 0, 175] },
+  floor: { p: [52, 190, 255], t: [52, 0, 100] },
+  wall: { p: [52, 72, 150], t: [52, 22, 10] },
+};
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DUR = reduce ? 1 : 750;
+let tw = null, camTw = null;
+const ease = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+const lerpQ = (a, b, t) => Object.fromEntries(Object.keys(a).map(k => [k, a[k] + (b[k] - a[k]) * t]));
+function setCam(name) {
+  const c = CAMS[name];
+  camTw = { t0: performance.now(), p0: camera.position.clone(), t1: controls.target.clone(),
+            p: new THREE.Vector3(...c.p), t: new THREE.Vector3(...c.t) };
+}
+window.onStep = s => {
+  for (const p of P) {
+    const to = target(p, s);
+    p.from = { ...p.cur }; p.to = to;
+    if (to && !p.mesh.visible) { p.from = { ...to }; }
+    if (to) p.mesh.visible = true;
+    p.mesh.material.color.copy(lit(p, s) ? p.base.clone().lerp(ACCENT, 0.6) : p.base);
+    p.ghost.visible = s > 0 && to !== p.fin;
+  }
+  raws.forEach(m => m.visible = s === 1);
+  tw = { t0: performance.now() };
+  setCam(STEPS[s].cam);
+};
+document.getElementById('reset').onclick = () => setCam(STEPS[step].cam);
+
+{ const c = CAMS[STEPS[step].cam]; camera.position.set(...c.p); controls.target.set(...c.t); }
+onStep(step);
+for (const p of P) { if (p.to) { p.cur = { ...p.to }; place(p.mesh, p.cur); } else p.mesh.visible = false; }
+tw = null; camTw = null;
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w / h < 1 ? 58 : 45; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view); resize();
+
+renderer.setAnimationLoop(now => {
+  if (tw) {
+    const k = ease(Math.min(1, (now - tw.t0) / DUR));
+    for (const p of P) {
+      if (!p.to) { if (k === 1) p.mesh.visible = false; continue; }
+      p.cur = lerpQ(p.from, p.to, k); place(p.mesh, p.cur);
+    }
+    if (k === 1) tw = null;
+  }
+  if (camTw) {
+    const k = ease(Math.min(1, (now - camTw.t0) / (reduce ? 1 : 900)));
+    camera.position.lerpVectors(camTw.p0, camTw.p, k); controls.target.lerpVectors(camTw.t1, camTw.t, k);
+    if (k === 1) camTw = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.SCENE_OK = true;
+</script>
+</body>
+</html>
