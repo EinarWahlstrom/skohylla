@@ -109,12 +109,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 // Steps: text first so the manual shows even if 3D fails to load.
 window.STEPS = [
   { t: 'Översikt', cam: 'done', b: [
-    'Två väggfasta hyllor <b>1040 × 295</b>, ovankant <b>170</b> och <b>470</b> över golv.',
+    'Två väggfasta hyllor <b>1090 × 310</b>, ovankant <b>170</b> och <b>470</b> över golv.',
     'Övre hyllan är sittbänk. Ram furu 27×43, 4 ribbor 21×43 på högkant.',
     'Vilar på U-lister i väggen. Inga skruvar syns framifrån.',
     'Tryck på ett steg för att se bygget fram till dit.' ] },
   { t: 'Mät och köp', cam: 'raw', b: [
-    'Mät nischen. Allt nedan gäller bredd <b>1050</b>. Annat mått: hyllbredd = nisch − 10, fram/bak/ribbor = hyllbredd − 54.',
+    'Nischen: <b>1100 × 310</b> vägg till vägg, ovanför golvlisterna. Annat mått: hyllbredd = nisch − 10, fram/bak/ribbor = hyllbredd − 54.',
     'Furu 27×43×2400 × <b>4</b>',
     'Furu 21×43: 3300 × <b>1</b> + 2400 × <b>3</b>',
     'Träskruv 5×80 ≈ 35 · 4×80 ≈ 16 · 4×50 ≈ 12',
@@ -122,21 +122,21 @@ window.STEPS = [
     '<span class="warn">Väggen: plugg 6 + 5×60 gäller betong. Gips → gipsplugg eller skruva i regel.</span>',
     'Trälim, 2 tvingar, slip P120 + P150, hårdvaxolja.' ] },
   { t: 'Kapa', cam: 'floor', b: [
-    '<span class="cut">27×43 nr 1: <b>986 · 986 · 295</b></span>',
-    '<span class="cut">27×43 nr 2: <b>986 · 986 · 295</b></span>',
-    '<span class="cut">27×43 nr 3: <b>295 · 295 · 250 · 250 · 250 · 250</b></span>',
-    '<span class="cut">27×43 nr 4: <b>996 · 996</b> bakre lister (nisch − 54, mät först)</span>',
-    '<span class="cut">21×43 3300: <b>986 · 986 · 986</b></span>',
-    '<span class="cut">21×43 2400 × 3: <b>986 · 986</b> per bräda. Två rester → <b>266 · 266</b> tvärslåar</span>',
+    '<span class="cut">27×43 nr 1: <b>1036 · 1036 · 250</b></span>',
+    '<span class="cut">27×43 nr 2: <b>1036 · 1036 · 250</b></span>',
+    '<span class="cut">27×43 nr 3: <b>310 · 310 · 310 · 310 · 250 · 250</b></span>',
+    '<span class="cut">27×43 nr 4: <b>1046 · 1046</b> bakre lister (nisch − 54, mät först)</span>',
+    '<span class="cut">21×43 3300: <b>1036 · 1036 · 1036</b></span>',
+    '<span class="cut">21×43 2400 × 3: <b>1036 · 1036</b> per bräda. Två rester → <b>281 · 281</b> tvärslåar</span>',
     'Tejpa ihop ribborna och kapa i ett svep. 90°, kolla vinkeln.' ] },
   { t: 'Bygg ramarna ×2', cam: 'floor', b: [
-    'Gavlar 295 utanpå fram/bak 986 → ram <b>1040 × 295</b>.',
-    'Ribbor på högkant, glipa <b>31</b>. Ribbans bakkant från ramens bakkant: <b>58 · 111 · 163 · 216</b>.',
+    'Gavlar 310 utanpå fram/bak 1036 → ram <b>1090 × 310</b>.',
+    'Ribbor på högkant, glipa <b>34</b>. Ribbans bakkant från ramens bakkant: <b>61 · 117 · 172 · 228</b>.',
     'Förborra 4 mm genom gaveln, 3 mm i ändträet. Lim + 5×80.',
     'Per gavel: 2 skruv i fram, 2 i bak, 1 per ribba.',
-    'Diagonalerna lika (≈ <b>1081</b>) innan limmet härdar.' ] },
+    'Diagonalerna lika (≈ <b>1133</b>) innan limmet härdar.' ] },
   { t: 'Tvärslå under mitten', cam: 'floor', b: [
-    'Vänd ramen. 21×43 × 266 flatliggande, centrum <b>520</b> från gavelns utsida.',
+    'Vänd ramen. 21×43 × 281 flatliggande, centrum <b>545</b> från gavelns utsida.',
     'Jäms med framkanten, slutar vid bakstycket.',
     'Lim + 4×50 upp i varje ribba och framstycket.',
     'Fördelar sittlasten mellan ribborna.' ] },
@@ -151,7 +151,7 @@ window.STEPS = [
     'Höger: borra 6 mm, plugg + 5×60, 2 per list.',
     'Vattenpass tvärs över: vänster och höger i våg.' ] },
   { t: 'Bakre lister', cam: 'wall', b: [
-    '996 mellan sidolisterna, mot bakväggen.',
+    '1046 mellan sidolisterna, mot bakväggen.',
     'Samma ovankant: <b>127</b> och <b>427</b>.',
     'Plugg + 5×60, 4 per list.' ] },
   { t: 'Montera nedre hyllan', cam: 'done', b: [
@@ -196,7 +196,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ---- measurements in cm (same as skohylla.scad). Model coords: x = width from left wall, y = depth from back wall, z = up ----
-const N = 105, SP = 0.5, D = 29.5, RT = 2.7, RH = 4.3, BT = 2.1, NR = 4, LL = 25, BK = 2.7;
+const N = 110, SP = 0.5, D = 31, RT = 2.7, RH = 4.3, BT = 2.1, NR = 4, LL = 25, BK = 2.7;
 const HB = N - 2 * SP, IN = HB - 2 * RT, GL = (D - 2 * RT - NR * BT) / (NR + 1), BL = N - 2 * RT;
 const LEVELS = [{ k: 'N', top: 17, off: 40 }, { k: 'O', top: 47, off: 80 }];
 const FRAME = new Set(['gable', 'fb', 'rib', 'cross']);
@@ -362,16 +362,16 @@ sbox('white', 0, HX1, 0, 1.5, CH - 13, CH - 10); sbox('white', HX1 - 1.5, HX1, 0
 // fuse box high on the back wall
 sbox('fuse', 22, 56, 0, 4, 188, 243); sbox('white', 25, 53, 4, 4.4, 198, 236);
 sbox('dark', 27, 51, 4.4, 5, 215, 220); sbox('dark', 27, 51, 4.4, 5, 203, 207);
-sbox('dark', 51.7, 52.3, 74.7, 75.3, 224, CH);                     // lamp cord
+sbox('dark', N / 2 - 0.3, N / 2 + 0.3, 74.7, 75.3, 224, CH);                     // lamp cord
 for (const [k, list] of Object.entries(bins)) {
   const m = new THREE.Mesh(mergeGeometries(list), M[k]); m.receiveShadow = true; scene.add(m);
 }
 const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(HX1 - HX0, HD).rotateX(-Math.PI / 2).translate((HX0 + HX1) / 2, 0, HD / 2), lam('#ffffff', { map: parquet }));
 floorMesh.receiveShadow = true; scene.add(floorMesh);
 // blue pendant lamp: open cone, white inside
-const cone = new THREE.CylinderGeometry(5, 15, 36, 28, 1, true).translate(52, 206, 75);
+const cone = new THREE.CylinderGeometry(5, 15, 36, 28, 1, true).translate(N / 2, 206, 75);
 scene.add(new THREE.Mesh(cone, lam('#5c84a1')), new THREE.Mesh(cone, new THREE.MeshBasicMaterial({ color: '#fff6e4', side: THREE.BackSide })));
-const band = new THREE.CylinderGeometry(13.9, 14.6, 3, 28, 1, true).translate(52, 193, 75);
+const band = new THREE.CylinderGeometry(13.9, 14.6, 3, 28, 1, true).translate(N / 2, 193, 75);
 scene.add(new THREE.Mesh(band, lam('#dfe8ee')));
 
 const unit = new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5);
@@ -398,9 +398,9 @@ const raws = RAW.map(q => { const m = box(q, '#d9b07a'); m.add(new THREE.LineSeg
 // ---- step changes: tween boards and camera ----
 const CAMS = {
   done: { p: [35, 125, 270], t: [38, 55, 25] },
-  raw: { p: [52, 330, 400], t: [52, 0, 175] },
-  floor: { p: [52, 190, 255], t: [52, 0, 100] },
-  wall: { p: [52, 72, 150], t: [52, 22, 10] },
+  raw: { p: [55, 330, 400], t: [55, 0, 175] },
+  floor: { p: [55, 190, 255], t: [55, 0, 100] },
+  wall: { p: [55, 72, 150], t: [55, 22, 10] },
 };
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const DUR = reduce ? 1 : 750;
